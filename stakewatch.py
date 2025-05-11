@@ -140,11 +140,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--batch-size', type=int, help='Maximum number of blocks to process in one request', default=10_000)
     return parser.parse_args()
 
+args = parse_args()
 bot = commands.Bot(intents=discord.Intents.none(), command_prefix=())
 
 @bot.event
 async def setup_hook():
-    args = parse_args()
     cog = StakeWatch(bot, args)
     await bot.add_cog(cog)
     
