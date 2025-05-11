@@ -99,9 +99,8 @@ class StakeWatch(commands.Cog):
                     description=(
                         f'🏦 [{vault_name}]({BLOCK_EXPLORER_URL}/address/{vault_contract.address})\n'
                         f'💵 **{amount:,.6g} ETH**\n'
-                        f'👤 [{sender[:10]}...{sender[-8:]}]({BLOCK_EXPLORER_URL}/address/{sender})\n'
-                        f'🔗 [{tx_hash[:10]}...{tx_hash[-8:]}]({BLOCK_EXPLORER_URL}/tx/{tx_hash})\n'
-                        f'📦 [{block_number}]({BLOCK_EXPLORER_URL}/block/{block_number})\n'
+                        f'🪪 [{sender[:10]}...{sender[-8:]}]({BLOCK_EXPLORER_URL}/address/{sender})\n'
+                        f'📦 [{tx_hash[:10]}...{tx_hash[-8:]}]({BLOCK_EXPLORER_URL}/tx/{tx_hash})\n'
                         f'⏰ <t:{timestamp}:R>'
                     )
                 )
@@ -126,9 +125,8 @@ class StakeWatch(commands.Cog):
                     description=(
                         f'🏦 [{vault_name}]({BLOCK_EXPLORER_URL}/address/{vault_contract.address})\n'
                         f'💵 **-{amount:,.6g} ETH**\n'
-                        f'👤 [{sender[:10]}...{sender[-8:]}]({BLOCK_EXPLORER_URL}/address/{sender})\n'
-                        f'🔗 [{tx_hash[:10]}...{tx_hash[-8:]}]({BLOCK_EXPLORER_URL}/tx/0x{tx_hash})\n'
-                        f'📦 [{block_number}]({BLOCK_EXPLORER_URL}/block/{block_number})\n'
+                        f'🪪 [{sender[:10]}...{sender[-8:]}]({BLOCK_EXPLORER_URL}/address/{sender})\n'
+                        f'📦 [{tx_hash[:10]}...{tx_hash[-8:]}]({BLOCK_EXPLORER_URL}/tx/0x{tx_hash})\n'
                         f'⏰ <t:{timestamp}:R>'
                     )
                 )
