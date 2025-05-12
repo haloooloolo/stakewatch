@@ -7,8 +7,8 @@ from typing import Any, Optional
 import discord
 from discord.ext import tasks, commands
 
-from web3 import Web3
-from web3.contract import Contract
+from web3 import AsyncWeb3
+from web3.contract import AsyncContract
 from eth_typing import BlockNumber
 
 logging.basicConfig(format='%(levelname)5s %(asctime)s [%(name)s] %(message)s')
@@ -20,7 +20,7 @@ BLOCK_EXPLORER_URL = 'https://etherscan.io'
 class StakeWatch(commands.Cog):
     def __init__(self, bot: commands.Bot, cl_args: argparse.Namespace):
         self.bot = bot
-        self.w3 = Web3(Web3.HTTPProvider(cl_args.rpc))
+        self.w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(cl_args.rpc))
         self.vaults = self._get_vaults()
         self.state = {
             'last_block': 22319339
@@ -30,7 +30,7 @@ class StakeWatch(commands.Cog):
         self.channel = None
         self.fetch_events.start()
         
-    def _get_vaults(self) -> dict[str, Contract]:
+    def _get_vaults(self) -> dict[str, AsyncContract]:
         with open('res/vault.abi.json', 'r') as f:
             abi = f.read()
         vault_addresses = {
@@ -59,7 +59,8 @@ class StakeWatch(commands.Cog):
     @tasks.loop(seconds=30)
     async def fetch_events(self):
         from_block = self.state['last_block'] + 1
-        to_block = min(self.w3.eth.block_number, from_block + self.batch_size - 1)
+        latest_block = await self.w3.eth.block_number
+        to_block = min(latest_block, from_block + self.batch_size - 1)
         
         if to_block < from_block:
             logger.warning('No new blocks to process')
@@ -68,8 +69,8 @@ class StakeWatch(commands.Cog):
         logger.info(f'Fetching events in [{from_block}, {to_block}]')
         
         embeds: list[tuple[BlockNumber, discord.Embed]] = []
-        embeds += self.get_deposit_events(from_block, to_block)
-        embeds += self.get_exit_events(from_block, to_block)
+        embeds += await self.get_deposit_events(from_block, to_block)
+        embeds += await self.get_exit_events(from_block, to_block)
                 
         for block_id, embed in sorted(embeds):
             await self.channel.send(embed=embed)
@@ -82,17 +83,17 @@ class StakeWatch(commands.Cog):
         await self.bot.wait_until_ready()
         self.channel = await self.bot.fetch_channel(self._channel_id)
             
-    def get_deposit_events(self, from_block: BlockNumber, to_block: BlockNumber) -> list[tuple[BlockNumber, discord.Embed]]:
+    async def get_deposit_events(self, from_block: BlockNumber, to_block: BlockNumber) -> list[tuple[BlockNumber, discord.Embed]]:
         embeds = []
         for vault_name, vault_contract in self.vaults.items():
-            event_filter = vault_contract.events.Deposited.create_filter(from_block=from_block, to_block=to_block) 
-            for event in event_filter.get_all_entries():
+            event_filter = await vault_contract.events.Deposited.create_filter(from_block=from_block, to_block=to_block) 
+            for event in await event_filter.get_all_entries():
                 logger.debug(f'New deposit event: {vault_name}: {event}')
                 amount = self.w3.from_wei(event.args.assets, 'ether')
                 sender = event.args.caller
                 tx_hash = '0x' + event.transactionHash.hex()
                 block_number = event.blockNumber
-                timestamp = self.w3.eth.get_block(block_number).timestamp
+                timestamp = (await self.w3.eth.get_block(block_number)).timestamp
                 embed = discord.Embed(
                     title='**New Deposit**', 
                     color=discord.Color.green(),
@@ -107,18 +108,18 @@ class StakeWatch(commands.Cog):
                 embeds.append((block_number, embed))
         return embeds
     
-    def get_exit_events(self, from_block: BlockNumber, to_block: BlockNumber) -> list[tuple[BlockNumber, discord.Embed]]:
+    async def get_exit_events(self, from_block: BlockNumber, to_block: BlockNumber) -> list[tuple[BlockNumber, discord.Embed]]:
         embeds = []
         for vault_name, vault_contract in self.vaults.items():
-            event_filter = vault_contract.events.ExitQueueEntered.create_filter(from_block=from_block, to_block=to_block) 
-            for event in event_filter.get_all_entries():
+            event_filter = await vault_contract.events.ExitQueueEntered.create_filter(from_block=from_block, to_block=to_block) 
+            for event in await event_filter.get_all_entries():
                 logger.debug(f'New withdrawal event: {vault_name}: {event}')
-                assets = vault_contract.functions.convertToAssets(event.args.shares).call(block_identifier=event.blockNumber)
+                assets = await vault_contract.functions.convertToAssets(event.args.shares).call(block_identifier=event.blockNumber)
                 amount = self.w3.from_wei(assets, 'ether')
                 sender = event.args.owner
                 tx_hash = '0x' + event.transactionHash.hex()
                 block_number = event.blockNumber
-                timestamp = self.w3.eth.get_block(block_number).timestamp
+                timestamp = (await self.w3.eth.get_block(block_number)).timestamp
                 embed = discord.Embed(
                     title='**New Withdrawal**', 
                     color=discord.Color.red(),
