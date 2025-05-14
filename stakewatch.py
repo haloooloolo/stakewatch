@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import argparse
+from operator import itemgetter
 from typing import Any, Optional
 
 import discord
@@ -25,9 +26,9 @@ class StakeWatch(commands.Cog):
         self.state = {
             'last_block': 22319339
         } | (self._load_state() or {})
-        self._channel_id = cl_args.channel
-        self.batch_size = cl_args.batch_size
-        self.channel = None
+        self.cl_args = cl_args
+        self.event_channel = None
+        self.error_channel = None
         self.fetch_events.start()
         
     def _get_vaults(self) -> dict[str, AsyncContract]:
@@ -59,7 +60,7 @@ class StakeWatch(commands.Cog):
     async def fetch_events(self):
         from_block = self.state['last_block'] + 1
         latest_block = await self.w3.eth.block_number
-        to_block = min(latest_block, from_block + self.batch_size - 1)
+        to_block = min(latest_block, from_block + self.cl_args.batch_size - 1)
         
         if to_block < from_block:
             logger.warning('No new blocks to process')
@@ -71,8 +72,8 @@ class StakeWatch(commands.Cog):
         embeds += await self.get_deposit_events(from_block, to_block)
         embeds += await self.get_exit_events(from_block, to_block)
                 
-        for block_id, embed in sorted(embeds):
-            await self.channel.send(embed=embed)
+        for block_id, embed in sorted(embeds, key=itemgetter(0)):
+            await self.event_channel.send(embed=embed)
         
         self.state['last_block'] = to_block
         self._save_state(self.state)
@@ -80,7 +81,15 @@ class StakeWatch(commands.Cog):
     @fetch_events.before_loop
     async def setup(self):
         await self.bot.wait_until_ready()
-        self.channel = await self.bot.fetch_channel(self._channel_id)
+        self.event_channel = await self.bot.fetch_channel(self.cl_args.channel)
+        if self.cl_args.errors:
+            self.error_channel = await self.bot.fetch_channel(self.cl_args.errors)
+            
+    @fetch_events.error
+    async def on_error(self, error: Exception):
+        logger.exception('Failed to process events')
+        if self.error_channel:
+            await self.error_channel.send(str(error))
             
     async def get_deposit_events(self, from_block: BlockNumber, to_block: BlockNumber) -> list[tuple[BlockNumber, discord.Embed]]:
         embeds = []
@@ -136,8 +145,9 @@ class StakeWatch(commands.Cog):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='stakewatch')
     parser.add_argument('-r', '--rpc', type=str, help='Ethereum RPC URL', required=True)
-    parser.add_argument('-c', '--channel', type=int, help='Discord event channel I.', required=True)
-    parser.add_argument('--batch-size', type=int, help='Maximum number of blocks to process in one request', default=10_000)
+    parser.add_argument('-c', '--channel', type=int, help='Discord channel ID for events', required=True)
+    parser.add_argument('-e', '--errors', type=int, help='Discord channel ID for events', required=False)
+    parser.add_argument('--batch-size', type=int, help='Maximum number of processed blocks per iteration', default=10_000)
     return parser.parse_args()
 
 args = parse_args()
