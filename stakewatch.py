@@ -31,11 +31,10 @@ class StakeWatch(commands.Cog):
         self.fetch_events.start()
         
     def _get_vaults(self) -> dict[str, AsyncContract]:
+        with open('res/vaults.json', 'r') as f:
+            vault_addresses = json.load(f)
         with open('res/vault.abi.json', 'r') as f:
             abi = f.read()
-        vault_addresses = {
-            'Private Vault': '0xB266274F55e784689e97b7E363B0666d92e6305B'
-        }
         return {name: self.w3.eth.contract(address=addr, abi=abi) for name, addr in vault_addresses.items()}
                 
     def _load_state(self) -> Optional[dict[str, Any]]:
