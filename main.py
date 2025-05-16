@@ -3,25 +3,23 @@ import json
 import logging
 import argparse
 from operator import attrgetter
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar, cast
 
 import discord
-from discord.abc import GuildChannel, PrivateChannel
-from discord.threads import Thread
+from discord.abc import Messageable
 from discord.ext import tasks, commands
 
 from web3 import AsyncWeb3
 from web3.contract import AsyncContract
 from eth_typing import BlockNumber
 
-from events import Event, DepositEvent, ExitEvent
+from events import Event, Deposit, ExitRequest, ValidatorRegistration
 
 logging.basicConfig(format='%(levelname)5s %(asctime)s [%(name)s] %(message)s')
 logging.getLogger().setLevel('INFO')
 logger = logging.getLogger('StakeWatch')
 
 E = TypeVar('E', bound=Event)
-Channel = Union[GuildChannel, PrivateChannel, Thread]
 
 class StakeWatch(commands.Cog):
     def __init__(self, bot: commands.Bot, cl_args: argparse.Namespace):
@@ -32,8 +30,8 @@ class StakeWatch(commands.Cog):
             'last_block': 22319339
         } | (self._load_state() or {})
         self.cl_args = cl_args
-        self.event_channel: Optional[Channel] = None
-        self.error_channel: Optional[Channel] = None
+        self.event_channel: Messageable = Messageable()
+        self.error_channel: Optional[Messageable] = None
         self.fetch_events.start()
         
     def _get_vaults(self) -> dict[str, AsyncContract]:
@@ -74,8 +72,9 @@ class StakeWatch(commands.Cog):
         logger.info(f'Fetching events in [{from_block}, {to_block}]')
         
         events: list[Event] = []
-        events += await self._get_events_in_range(DepositEvent, from_block, to_block)
-        events += await self._get_events_in_range(ExitEvent, from_block, to_block)
+        events += await self._get_events_in_range(Deposit, from_block, to_block)
+        events += await self._get_events_in_range(ExitRequest, from_block, to_block)
+        events += await self._get_events_in_range(ValidatorRegistration, from_block, to_block)
                 
         for event in sorted(events, key=attrgetter('block', 'tx_idx')):
             embed = await event.to_embed()
@@ -87,9 +86,9 @@ class StakeWatch(commands.Cog):
     async def _get_events_in_range(self, event_type: type[E], from_block: BlockNumber, to_block: BlockNumber) -> list[E]:
         events: list[E] = []
         for vault_name, vault_contract in self.vaults.items():
-            log_filter = await event_type.get_filter(vault_contract, from_block, to_block)
+            log_filter = await event_type.get_contract_event(vault_contract).create_filter(from_block=from_block, to_block=to_block)
             for receipt in await log_filter.get_all_entries():
-                logger.debug(f'New event: {vault_name}: {receipt}')
+                logger.info(f'New event: {vault_name}: {receipt}')
                 event = event_type(self.w3, vault_name, vault_contract, receipt)
                 events.append(event)
         return events
@@ -97,9 +96,9 @@ class StakeWatch(commands.Cog):
     @fetch_events.before_loop
     async def setup(self) -> None:
         await self.bot.wait_until_ready()
-        self.event_channel = await self.bot.fetch_channel(self.cl_args.channel)
+        self.event_channel = cast(Messageable, await self.bot.fetch_channel(self.cl_args.channel))
         if self.cl_args.errors:
-            self.error_channel = await self.bot.fetch_channel(self.cl_args.errors)
+            self.error_channel = cast(Messageable, await self.bot.fetch_channel(self.cl_args.errors))
             
     @fetch_events.error
     async def on_error(self, error: BaseException) -> None:
