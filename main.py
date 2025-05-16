@@ -78,6 +78,8 @@ class StakeWatch(commands.Cog):
                 
         for event in sorted(events, key=attrgetter('block', 'tx_idx')):
             embed = await event.to_embed()
+            vault_balance = await self.w3.eth.get_balance(event.vault_contract.address, block_identifier=event.block)
+            embed.set_footer(text=f'Vault Balance: {self.w3.from_wei(vault_balance, "ether"):.2f} ETH')
             await self.event_channel.send(embed=embed)
         
         self.state['last_block'] = to_block
@@ -115,16 +117,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--batch-size', type=int, help='Maximum number of processed blocks per iteration', default=10_000)
     return parser.parse_args()
 
-args = parse_args()
-bot = commands.Bot(intents=discord.Intents.none(), command_prefix=())
 
-@bot.event
-async def setup_hook():
-    cog = StakeWatch(bot, args)
-    await bot.add_cog(cog)
+def main():  
+    args = parse_args()
+    if not (token := os.getenv('DISCORD_TOKEN')):
+        raise ValueError('DISCORD_TOKEN environment variable not set')
     
-
-if not (token := os.getenv('DISCORD_TOKEN')):
-    raise ValueError('DISCORD_TOKEN environment variable not set')
-
-bot.run(token)
+    bot = commands.Bot(intents=discord.Intents.none(), command_prefix=())
+    
+    @bot.event
+    async def setup_hook():
+        cog = StakeWatch(bot, args)
+        await bot.add_cog(cog)
+    
+    bot.run(token)
+    
+    
+if __name__ == '__main__':
+    main()
