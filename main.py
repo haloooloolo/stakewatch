@@ -11,6 +11,7 @@ from discord.ext import tasks, commands
 
 from web3 import AsyncWeb3
 from web3.contract import AsyncContract
+from web3._utils.filters import AsyncLogFilter
 from eth_typing import BlockNumber
 
 from events import Event, Deposit, ExitRequest, ValidatorRegistration
@@ -88,11 +89,19 @@ class StakeWatch(commands.Cog):
     async def _get_events_in_range(self, event_type: type[E], from_block: BlockNumber, to_block: BlockNumber) -> list[E]:
         events: list[E] = []
         for vault_name, vault_contract in self.vaults.items():
-            log_filter = await event_type.get_contract_event(vault_contract).create_filter(from_block=from_block, to_block=to_block)
+            log_filter: AsyncLogFilter = await event_type.get_contract_event(vault_contract).create_filter(from_block=from_block, to_block=to_block)
+            
+            events_by_tx = {}
             for receipt in await log_filter.get_all_entries():
                 logger.info(f'New event: {vault_name}: {receipt}')
-                event = event_type(self.w3, vault_name, vault_contract, receipt)
+                if receipt['transactionHash'] not in events_by_tx:
+                    events_by_tx[receipt['transactionHash']] = []
+                events_by_tx[receipt['transactionHash']].append(receipt)
+                
+            for tx_hash, receipts in events_by_tx.items():
+                event = event_type(self.w3, vault_name, vault_contract, receipts)
                 events.append(event)
+                
         return events
         
     @fetch_events.before_loop
