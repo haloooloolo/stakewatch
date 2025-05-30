@@ -28,7 +28,8 @@ class StakeWatch(commands.Cog):
         self.w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(cl_args.rpc))
         self.vaults = self._get_vaults()
         self.state: dict[str, Any] = {
-            'last_block': 22319339
+            'last_block': 22319339,
+            'deposit_threads': {},
         } | (self._load_state() or {})
         self.cl_args = cl_args
         self.event_channel: Messageable = Messageable()
@@ -76,11 +77,24 @@ class StakeWatch(commands.Cog):
         events += await self._get_events_in_range(Deposit, from_block, to_block)
         events += await self._get_events_in_range(ExitRequest, from_block, to_block)
         events += await self._get_events_in_range(ValidatorRegistration, from_block, to_block)
-                
+                                
         for event in sorted(events, key=attrgetter('block', 'tx_idx')):
             embed = await event.to_embed()
-            vault_balance = await self.w3.eth.get_balance(event.vault_contract.address, block_identifier=event.block)
-            embed.set_footer(text=f'Vault Balance: {self.w3.from_wei(vault_balance, "ether"):.2f} ETH')
+            vault_address = event.vault_contract.address
+            vault_balance = await self.w3.eth.get_balance(vault_address, block_identifier=event.block)
+            embed.set_footer(text=f'Vault Balance: {self.w3.from_wei(vault_balance, "ether"):,.2f} ETH')
+            
+            if isinstance(event, Deposit):
+                message = await self.event_channel.send(embed=embed)
+                thread = await message.create_thread(name='Validator Deposits')
+                self.state['deposit_threads'][vault_address] = thread.id
+                continue
+            elif isinstance(event, ValidatorRegistration):
+                if deposit_thread_id := self.state['deposit_threads'].get(vault_address):
+                    deposit_thread = cast(discord.Thread, await self.bot.fetch_channel(deposit_thread_id))
+                    await deposit_thread.send(embed=embed)
+                    continue
+                
             await self.event_channel.send(embed=embed)
         
         self.state['last_block'] = to_block
