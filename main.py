@@ -136,7 +136,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='stakewatch')
     parser.add_argument('-r', '--rpc', type=str, help='Ethereum RPC URL', required=True)
     parser.add_argument('-c', '--channel', type=int, help='Discord channel ID for events', required=True)
-    parser.add_argument('-e', '--errors', type=int, help='Discord channel ID for events', required=False)
+    parser.add_argument('-e', '--errors', type=int, help='Discord channel ID for error reporting', required=False)
     parser.add_argument('--batch-size', type=int, help='Maximum number of processed blocks per iteration', default=10_000)
     return parser.parse_args()
 
