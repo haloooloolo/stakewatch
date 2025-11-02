@@ -9,7 +9,7 @@ from web3.contract.async_contract import AsyncContractEvent
 from eth_typing import BlockNumber, HexStr
 
 EL_EXPLORER_URL = 'https://etherscan.io'
-CL_EXPLORER_URL = 'https:/beaconcha.in'
+CL_EXPLORER_URL = 'https://beaconcha.in'
 
 class Event(ABC):
     def __init__(self, w3: AsyncWeb3, vault_name: str, vault_contract: AsyncContract, receipts: list[LogReceipt]):
