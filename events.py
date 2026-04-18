@@ -27,7 +27,7 @@ class Event(ABC):
         pass
     
     @abstractmethod
-    async def to_embed(self) -> discord.Embed:
+    async def to_embed(self) -> discord.Embed | None:
         pass
 
 class Deposit(Event):    
@@ -56,10 +56,14 @@ class ExitRequest(Event):
     def get_contract_event(contract: AsyncContract) -> AsyncContractEvent:
         return contract.events.ExitQueueEntered
     
-    async def to_embed(self) -> discord.Embed:
+    async def to_embed(self) -> discord.Embed | None:
         shares = sum(args['shares'] for args in self.args)
         assets = await self.vault_contract.functions.convertToAssets(shares).call(block_identifier=self.block)
         amount = self.w3.from_wei(assets, 'ether')
+        
+        if amount < 1:
+            return None
+        
         sender = self.args[0]['owner']
         timestamp = (await self.w3.eth.get_block(self.block)).get('timestamp', 0)
         return discord.Embed(

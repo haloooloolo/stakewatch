@@ -80,6 +80,9 @@ class StakeWatch(commands.Cog):
                                 
         for event in sorted(events, key=attrgetter('block', 'tx_idx')):
             embed = await event.to_embed()
+            if not embed:
+                continue
+            
             vault_address = event.vault_contract.address
             vault_balance = await self.w3.eth.get_balance(vault_address, block_identifier=event.block)
             embed.set_footer(text=f'Vault Balance: {self.w3.from_wei(vault_balance, "ether"):,.2f} ETH')
